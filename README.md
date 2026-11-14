@@ -7,8 +7,8 @@ assemble and install a self-contained offline bundle:
 ```
 pi-rust-airgapped-<date>.tar.gz
 ├── rpi                      # static musl binary (plain upstream pi-rust, renamed file)
-├── pi-llamafile/            # the extension package (TS + lifecycle, no weights)
-├── models/                  # .llamafile weights (from pi-llamafile-models)
+├── pi-embedded-ai/            # the extension package (TS + lifecycle, no weights)
+├── models/                  # .llamafile weights (from awesome-llamafiles)
 ├── SHA256SUMS               # integrity of everything above
 ├── install.sh               # offline installer
 └── README.md                # this file (copy)
@@ -23,15 +23,15 @@ everything after: the model runs locally, no API keys, no telemetry.
 | Input | Default source | Fully-offline alternative |
 |-------|----------------|---------------------------|
 | `rpi` binary | GitHub release of `andrea-tomassi/pi-rust` (`--version`) | `--rpi-bin /path/to/rpi` (local musl build) |
-| `pi-llamafile/` | `../pi-llamafile` checkout | `--extension-dir` |
-| `models/` | `../pi-llamafile-models` checkout, or `--models-release <tag>` (downloaded from the pi-llamafile-models releases) | `--models-dir` |
+| `pi-embedded-ai/` | `../pi-embedded-ai` checkout | `--extension-dir` |
+| `models/` | `../awesome-llamafiles` checkout, or `--models-release <tag>` (downloaded from the awesome-llamafiles releases) | `--models-dir` |
 
 ## Build a bundle
 
 ```sh
 ./scripts/make-bundle.sh --version v0.12.14
 # fully offline build:
-./scripts/make-bundle.sh --rpi-bin /path/to/rpi --extension-dir ../pi-llamafile --models-dir ../pi-llamafile-models
+./scripts/make-bundle.sh --rpi-bin /path/to/rpi --extension-dir ../pi-embedded-ai --models-dir ../awesome-llamafiles
 # models from the published distro (needs `gh` auth, no local checkout):
 ./scripts/make-bundle.sh --rpi-bin /path/to/rpi --models-release models-v1
 ```
@@ -53,7 +53,7 @@ What install does, in order:
 
 1. verifies `SHA256SUMS` (aborts on any mismatch);
 2. copies `rpi` to `$PREFIX/$NAME` (`~/.local/bin/rpi` by default);
-3. registers the extension: `$NAME install ./pi-llamafile/` (local path, no network);
+3. registers the extension: `$NAME install ./pi-embedded-ai/` (local path, no network);
 4. copies `models/*.llamafile` to `~/.pi/agent/models/` (skipped with `--skip-models`);
 5. with `--check`: starts the stack once and prints `--list-models` (proves the
    model serves before you need it).

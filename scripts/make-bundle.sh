@@ -1,11 +1,11 @@
 #!/bin/sh
-# Assemble an airgapped bundle: rpi binary + pi-llamafile extension + models.
+# Assemble an airgapped bundle: rpi binary + pi-embedded-ai extension + models.
 # Usage: make-bundle.sh [--version vX.Y.Z | --rpi-bin PATH] [--extension-dir D]
 #                        [--models-dir D | --models-release TAG] [--name rpi] [--out DIR]
 # A --version build downloads the static musl binary from the fork's releases
 # (needs network at BUILD time). A --rpi-bin build is fully offline.
 # Models come from --models-dir (local checkout) or --models-release TAG
-# (downloaded from the pi-llamafile-models releases; needs `gh` auth).
+# (downloaded from the awesome-llamafiles releases; needs `gh` auth).
 set -eu
 
 REPO_URL=https://github.com/andrea-tomassi/pi-rust
@@ -44,11 +44,11 @@ done
 [ "$name" != pi ] || die "the installed name must not be 'pi': the TypeScript pi owns that"
 
 root=$(CDPATH='' cd -- "$(dirname "$0")/.." && pwd)
-extension_dir=${extension_dir:-$root/../pi-llamafile}
+extension_dir=${extension_dir:-$root/../pi-embedded-ai}
 if [ -n "${models_release:-}" ]; then
 	[ -z "${models_dir:-}" ] || die "--models-dir and --models-release are mutually exclusive"
 else
-	models_dir=${models_dir:-$root/../pi-llamafile-models}
+	models_dir=${models_dir:-$root/../awesome-llamafiles}
 fi
 [ -d "$extension_dir" ] || die "extension dir not found: $extension_dir"
 [ -f "$extension_dir/package.json" ] || die "not an extension package: $extension_dir (no package.json)"
@@ -76,13 +76,13 @@ fi
 chmod 755 "$work/rpi"
 
 # 2. The extension (sources only: no node_modules, no .git).
-mkdir -p "$work/pi-llamafile"
+mkdir -p "$work/pi-embedded-ai"
 (
 	cd "$extension_dir" && tar -cf - \
 		--exclude='.git' --exclude='node_modules' --exclude='*.log' \
 		package.json src README.md LICENSE
-) | (cd "$work/pi-llamafile" && tar -xf -)
-[ -f "$work/pi-llamafile/package.json" ] || die "extension packaging failed"
+) | (cd "$work/pi-embedded-ai" && tar -xf -)
+[ -f "$work/pi-embedded-ai/package.json" ] || die "extension packaging failed"
 
 # 3. The models (weights travel as files, never in git of the extension).
 mkdir -p "$work/models"
@@ -90,8 +90,8 @@ if [ -n "${models_release:-}" ]; then
 	command -v gh >/dev/null 2>&1 || die "--models-release needs 'gh' (authenticated: gh auth login)"
 	models_dir="$work/models-dl"
 	mkdir -p "$models_dir"
-	say "downloading models $models_release from andrea-tomassi/pi-llamafile-models"
-	gh release download "$models_release" --repo andrea-tomassi/pi-llamafile-models \
+	say "downloading models $models_release from andrea-tomassi/awesome-llamafiles"
+	gh release download "$models_release" --repo andrea-tomassi/awesome-llamafiles \
 		--pattern '*.llamafile' --dir "$models_dir" || die "models download failed"
 fi
 found=0
@@ -108,11 +108,11 @@ done
 # 4. Installer + docs + checksums.
 cp "$root/scripts/install.sh" "$work/install.sh"
 cp "$root/README.md" "$work/README.md"
-(cd "$work" && find rpi pi-llamafile models install.sh README.md -type f -exec sha256sum {} + | sort -k2 >SHA256SUMS)
+(cd "$work" && find rpi pi-embedded-ai models install.sh README.md -type f -exec sha256sum {} + | sort -k2 >SHA256SUMS)
 
 stamp=$(date +%Y%m%d)
 bundle="pi-rust-airgapped-$stamp.tar.gz"
 mkdir -p "$out"
-tar -czf "$out/$bundle" -C "$work" rpi pi-llamafile models SHA256SUMS install.sh README.md
+tar -czf "$out/$bundle" -C "$work" rpi pi-embedded-ai models SHA256SUMS install.sh README.md
 say "bundle: $out/$bundle ($(du -h "$out/$bundle" | cut -f1))"
 say "contents:"; tar -tzf "$out/$bundle" | head -12

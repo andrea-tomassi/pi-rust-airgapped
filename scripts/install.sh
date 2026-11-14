@@ -59,9 +59,9 @@ say "installed $prefix/$name"
 "$prefix/$name" --version >/dev/null || die "$prefix/$name does not run on this host"
 
 # 3. Register the extension from the local bundle path (no network).
-[ -d ./pi-llamafile ] || die "./pi-llamafile missing"
-"$prefix/$name" install ./pi-llamafile/ || die "extension install failed"
-say "extension pi-llamafile registered"
+[ -d ./pi-embedded-ai ] || die "./pi-embedded-ai missing"
+"$prefix/$name" install ./pi-embedded-ai/ || die "extension install failed"
+say "extension pi-embedded-ai registered"
 
 # 4. Place the weights where the extension discovers them.
 if [ "$models" -eq 1 ]; then
