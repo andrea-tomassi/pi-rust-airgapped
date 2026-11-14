@@ -32,8 +32,10 @@ Everything the installer needs travels inside one tarball, published as a
 release asset on this repo. On the new host (one download, then offline):
 
 ```sh
-# needs `gh` auth (repos are private) or a token download URL
+# repos are public: anonymous download works, `gh` optional
 gh release download bundle-v0.12.13-1 --repo andrea-tomassi/pi-rust-airgapped --pattern '*.tar.gz'
+# or without gh:
+# curl -fsSL -o bundle.tar.gz https://github.com/andrea-tomassi/pi-rust-airgapped/releases/download/bundle-v0.12.13-1/pi-rust-airgapped-20261114.tar.gz
 tar -xzf pi-rust-airgapped-*.tar.gz
 cd pi-rust-airgapped-*
 ./install.sh --name rpi --check   # checksum → binary → extension → models → live proof
