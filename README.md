@@ -26,6 +26,25 @@ everything after: the model runs locally, no API keys, no telemetry.
 | `pi-embedded-ai/` | `../pi-embedded-ai` checkout | `--extension-dir` |
 | `models/` | `../awesome-llamafiles` checkout, or `--models-release <tag>` (downloaded from the awesome-llamafiles releases) | `--models-dir` |
 
+## New host from zero (no local checkouts needed)
+
+Everything the installer needs travels inside one tarball, published as a
+release asset on this repo. On the new host (one download, then offline):
+
+```sh
+# needs `gh` auth (repos are private) or a token download URL
+gh release download bundle-v0.12.13-1 --repo andrea-tomassi/pi-rust-airgapped --pattern '*.tar.gz'
+tar -xzf pi-rust-airgapped-*.tar.gz
+cd pi-rust-airgapped-*
+./install.sh --name rpi --check   # checksum → binary → extension → models → live proof
+```
+
+What comes from where: the `rpi` binary is the vanilla upstream release
+(renamed at bundle time, never patched); the extension is `pi-embedded-ai`
+at the bundled revision; the weights come from the `awesome-llamafiles`
+`models-v1` release. No repo checkout is needed on the target host — only on
+the machine that runs `make-bundle.sh`.
+
 ## Build a bundle
 
 ```sh
