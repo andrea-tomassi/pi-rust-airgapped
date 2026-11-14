@@ -8,7 +8,7 @@
 # (downloaded from the awesome-llamafiles releases; needs `gh` auth).
 set -eu
 
-REPO_URL=https://github.com/andrea-tomassi/pi-rust
+REPO_URL=https://github.com/yannelli/pi-rust
 TARGET=x86_64-unknown-linux-musl
 
 say() { printf '%s\n' "$*"; }
@@ -71,7 +71,7 @@ else
 		wget -q -O "$work/release.tar.gz" "$url" || die "download failed: $url"
 	fi
 	tar -xzf "$work/release.tar.gz" -C "$work"
-	cp "$work/pi-$tag-$TARGET/rpi" "$work/rpi" || die "archive has no rpi binary"
+	cp "$work/pi-$tag-$TARGET/pi" "$work/rpi" || die "archive has no pi binary"
 fi
 chmod 755 "$work/rpi"
 

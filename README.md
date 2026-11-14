@@ -22,7 +22,7 @@ everything after: the model runs locally, no API keys, no telemetry.
 
 | Input | Default source | Fully-offline alternative |
 |-------|----------------|---------------------------|
-| `rpi` binary | GitHub release of `andrea-tomassi/pi-rust` (`--version`) | `--rpi-bin /path/to/rpi` (local musl build) |
+| `rpi` binary | Upstream `yannelli/pi-rust` release (`--version`, vanilla binary renamed at bundle time) | `--rpi-bin /path/to/rpi` (local musl build) |
 | `pi-embedded-ai/` | `../pi-embedded-ai` checkout | `--extension-dir` |
 | `models/` | `../awesome-llamafiles` checkout, or `--models-release <tag>` (downloaded from the awesome-llamafiles releases) | `--models-dir` |
 
