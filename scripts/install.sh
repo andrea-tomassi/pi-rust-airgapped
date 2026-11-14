@@ -85,6 +85,13 @@ esac
 
 if [ "$check" -eq 1 ]; then
 	say "booting once to prove the model serves (this loads ~1 GB, takes about a minute)..."
-	"$prefix/$name" --list-models
+	"$prefix/$name" --list-models >/dev/null 2>&1 || true
+	# First boot only starts the server; the provider lands in models.json once
+	# /models answers. Wait for it, then list again for real proof.
+	for _ in $(seq 1 18); do
+		[ -f "$HOME/.pi/agent/models.json" ] && break
+		sleep 10
+	done
+	"$prefix/$name" --list-models || warn "model not listed yet; run '$name --list-models' again in a minute"
 fi
 say "done. Run: $name"
