@@ -24,7 +24,7 @@ everything after: the model runs locally, no API keys, no telemetry.
 |-------|----------------|---------------------------|
 | `rpi` binary | GitHub release of `andrea-tomassi/pi-rust` (`--version`) | `--rpi-bin /path/to/rpi` (local musl build) |
 | `pi-llamafile/` | `../pi-llamafile` checkout | `--extension-dir` |
-| `models/` | `../pi-llamafile-models` checkout | `--models-dir` |
+| `models/` | `../pi-llamafile-models` checkout, or `--models-release <tag>` (downloaded from the pi-llamafile-models releases) | `--models-dir` |
 
 ## Build a bundle
 
@@ -32,6 +32,8 @@ everything after: the model runs locally, no API keys, no telemetry.
 ./scripts/make-bundle.sh --version v0.12.14
 # fully offline build:
 ./scripts/make-bundle.sh --rpi-bin /path/to/rpi --extension-dir ../pi-llamafile --models-dir ../pi-llamafile-models
+# models from the published distro (needs `gh` auth, no local checkout):
+./scripts/make-bundle.sh --rpi-bin /path/to/rpi --models-release models-v1
 ```
 
 ## Install a bundle (offline)

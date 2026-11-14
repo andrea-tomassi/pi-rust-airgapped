@@ -1,9 +1,11 @@
 #!/bin/sh
 # Assemble an airgapped bundle: rpi binary + pi-llamafile extension + models.
 # Usage: make-bundle.sh [--version vX.Y.Z | --rpi-bin PATH] [--extension-dir D]
-#                        [--models-dir D] [--name rpi] [--out DIR]
+#                        [--models-dir D | --models-release TAG] [--name rpi] [--out DIR]
 # A --version build downloads the static musl binary from the fork's releases
 # (needs network at BUILD time). A --rpi-bin build is fully offline.
+# Models come from --models-dir (local checkout) or --models-release TAG
+# (downloaded from the pi-llamafile-models releases; needs `gh` auth).
 set -eu
 
 REPO_URL=https://github.com/andrea-tomassi/pi-rust
@@ -19,6 +21,7 @@ version=
 rpi_bin=
 extension_dir=
 models_dir=
+models_release=
 name=rpi
 out=.
 
@@ -28,6 +31,7 @@ while [ $# -gt 0 ]; do
 	--rpi-bin) rpi_bin=${2:?--rpi-bin needs a value}; shift 2 ;;
 	--extension-dir) extension_dir=${2:?--extension-dir needs a value}; shift 2 ;;
 	--models-dir) models_dir=${2:?--models-dir needs a value}; shift 2 ;;
+	--models-release) models_release=${2:?--models-release needs a value}; shift 2 ;;
 	--name) name=${2:?--name needs a value}; shift 2 ;;
 	--out) out=${2:?--out needs a value}; shift 2 ;;
 	-h | --help) sed -n '2,7p' "$0"; exit 0 ;;
@@ -41,10 +45,14 @@ done
 
 root=$(CDPATH='' cd -- "$(dirname "$0")/.." && pwd)
 extension_dir=${extension_dir:-$root/../pi-llamafile}
-models_dir=${models_dir:-$root/../pi-llamafile-models}
+if [ -n "${models_release:-}" ]; then
+	[ -z "${models_dir:-}" ] || die "--models-dir and --models-release are mutually exclusive"
+else
+	models_dir=${models_dir:-$root/../pi-llamafile-models}
+fi
 [ -d "$extension_dir" ] || die "extension dir not found: $extension_dir"
 [ -f "$extension_dir/package.json" ] || die "not an extension package: $extension_dir (no package.json)"
-[ -d "$models_dir" ] || die "models dir not found: $models_dir"
+[ -n "${models_release:-}" ] || [ -d "$models_dir" ] || die "models dir not found: $models_dir"
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT INT TERM
@@ -78,6 +86,14 @@ mkdir -p "$work/pi-llamafile"
 
 # 3. The models (weights travel as files, never in git of the extension).
 mkdir -p "$work/models"
+if [ -n "${models_release:-}" ]; then
+	command -v gh >/dev/null 2>&1 || die "--models-release needs 'gh' (authenticated: gh auth login)"
+	models_dir="$work/models-dl"
+	mkdir -p "$models_dir"
+	say "downloading models $models_release from andrea-tomassi/pi-llamafile-models"
+	gh release download "$models_release" --repo andrea-tomassi/pi-llamafile-models \
+		--pattern '*.llamafile' --dir "$models_dir" || die "models download failed"
+fi
 found=0
 for model in "$models_dir"/*.llamafile; do
 	[ -e "$model" ] || continue
