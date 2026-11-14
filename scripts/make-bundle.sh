@@ -85,7 +85,7 @@ for model in "$models_dir"/*.llamafile; do
 	found=$((found + 1))
 done
 [ "$found" -gt 0 ] || die "no .llamafile in $models_dir"
-for doc in MODELS.md README.md; do
+for doc in MODELS.md README.md LICENSE LICENSE.LFM3; do
 	[ -f "$models_dir/$doc" ] && cp "$models_dir/$doc" "$work/models/"
 done
 
