@@ -2,8 +2,8 @@
 # Offline installer for a pi-rust airgapped bundle. Run from the extracted bundle dir.
 # Usage: install.sh [--name rpi] [--prefix ~/.local/bin] [--models] [--skip-models] [--check]
 #   --name    executable file name (default: rpi; must not be 'pi')
-#   --prefix  install directory (default: ~/.local/bin)
-#   --models  copy models/*.llamafile to ~/.pi/agent/models/ (default: on)
+#   --prefix  install directory for the binaries (default: ~/.local/bin)
+#   --models  copy models/*.llamafile and models/*.cmf to ~/.pi/agent/models/ (default: on)
 #   --check   boot once and print --list-models (proves the model serves)
 set -eu
 
@@ -58,6 +58,14 @@ cp ./rpi "$prefix/$name.new" && chmod 755 "$prefix/$name.new" && mv -f "$prefix/
 say "installed $prefix/$name"
 "$prefix/$name" --version >/dev/null || die "$prefix/$name does not run on this host"
 
+# 2b. The cortiq engine, when the bundle carries one (an LFM/CMF distribution).
+# The extension finds it as `cortiq-cpu` on PATH, so the name is part of the contract.
+if [ -f ./cortiq-cpu ]; then
+	cp ./cortiq-cpu "$prefix/cortiq-cpu.new" && chmod 755 "$prefix/cortiq-cpu.new" && mv -f "$prefix/cortiq-cpu.new" "$prefix/cortiq-cpu"
+	"$prefix/cortiq-cpu" --version >/dev/null || die "$prefix/cortiq-cpu does not run on this host"
+	say "installed $prefix/cortiq-cpu ($("$prefix/cortiq-cpu" --version 2>/dev/null | head -1))"
+fi
+
 # 3. Register the extension from the local bundle path (no network).
 [ -d ./pi-embedded-ai ] || die "./pi-embedded-ai missing"
 "$prefix/$name" install ./pi-embedded-ai/ || die "extension install failed"
@@ -69,13 +77,32 @@ if [ "$models" -eq 1 ]; then
 	dest="$HOME/.pi/agent/models"
 	mkdir -p "$dest" || die "could not create $dest"
 	n=0
+	c=0
 	for model in ./models/*.llamafile; do
 		[ -e "$model" ] || continue
 		cp "$model" "$dest/"
 		n=$((n + 1))
 	done
-	[ "$n" -gt 0 ] || warn "no .llamafile in ./models; place one in $dest or set PI_LLAMAFILE_DIR"
-	say "models in $dest ($n files)"
+	for model in ./models/*.cmf; do
+		[ -e "$model" ] || continue
+		cp "$model" "$dest/"
+		c=$((c + 1))
+	done
+	[ "$((n + c))" -gt 0 ] || warn "no .llamafile or .cmf in ./models; place one in $dest or set PI_LLAMAFILE_DIR / PI_CORTIQ_DIR"
+	say "models in $dest ($n llamafile, $c cmf)"
+fi
+
+# 4b. A bundle with cortiq is a CPU distribution: pin the engine to the CPU so it never
+# probes a GPU it was not built against (the setting is user-editable afterwards).
+if [ -f ./cortiq-cpu ] && [ "$models" -eq 1 ] && [ -n "${HOME:-}" ]; then
+	settings="$HOME/.pi/agent/cortiq.json"
+	if [ -f "$settings" ]; then
+		say "kept existing $settings"
+	else
+		mkdir -p "$HOME/.pi/agent"
+		printf '{\n  "gpu": "cpu"\n}\n' >"$settings"
+		say "cortiq defaults to CPU ($settings)"
+	fi
 fi
 
 case ":${PATH:-}:" in

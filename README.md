@@ -7,8 +7,9 @@ assemble and install a self-contained offline bundle:
 ```
 pi-rust-airgapped-<date>.tar.gz
 ├── rpi                      # static musl binary (plain upstream pi-rust, renamed file)
+├── cortiq-cpu               # optional: CPU-only cortiq engine (an LFM/CMF distribution)
 ├── pi-embedded-ai/            # the extension package (TS + lifecycle, no weights)
-├── models/                  # .llamafile weights (from awesome-llamafiles)
+├── models/                  # .llamafile weights and/or .cmf models
 ├── SHA256SUMS               # integrity of everything above
 ├── install.sh               # offline installer
 └── README.md                # this file (copy)
@@ -25,6 +26,11 @@ everything after: the model runs locally, no API keys, no telemetry.
 | `rpi` binary | Upstream `yannelli/pi-rust` release (`--version`, vanilla binary renamed at bundle time) | `--rpi-bin /path/to/rpi` (local musl build) |
 | `pi-embedded-ai/` | `../pi-embedded-ai` checkout | `--extension-dir` |
 | `models/` | `../awesome-llamafiles` checkout, or `--models-release <tag>` (downloaded from the awesome-llamafiles releases) | `--models-dir` |
+| `cortiq-cpu` (optional) | — | `--cortiq-bin /path/to/cortiq` (CPU-only build, see below) |
+| `.cmf` models (optional) | — | `--cmf-dir /path/to/cmf-models` |
+
+A bundle needs at least one model of either kind, so a CMF-only LFM
+distribution needs no llamafile checkout at all.
 
 ## New host from zero (no local checkouts needed)
 
@@ -55,7 +61,35 @@ the machine that runs `make-bundle.sh`.
 ./scripts/make-bundle.sh --rpi-bin /path/to/rpi --extension-dir ../pi-embedded-ai --models-dir ../awesome-llamafiles
 # models from the published distro (needs `gh` auth, no local checkout):
 ./scripts/make-bundle.sh --rpi-bin /path/to/rpi --models-release models-v1
+# LFM distribution: CMF models served by the bundled cortiq, no llamafile at all
+./scripts/make-bundle.sh --rpi-bin /path/to/rpi \
+  --cortiq-bin /path/to/cortiq-cpu --cmf-dir /path/to/cmf-models
 ```
+
+## The cortiq engine (LFM distributions)
+
+`.cmf` files are served by [cortiq](https://github.com/infosave2007/cmf), a
+single Rust binary — no Python, no ML framework. The bundle carries a
+**CPU-only** build installed as `cortiq-cpu`; the extension discovers that name
+on `PATH` and serves the `.cmf` models through it (`/cortiq start`).
+
+Build the engine for the bundle on any x86_64 Linux box with Rust installed:
+
+```sh
+rustup target add x86_64-unknown-linux-musl
+apt-get install -y musl-tools          # musl-gcc
+cargo install cortiq-cli --locked --no-default-features \
+  --target x86_64-unknown-linux-musl --root /tmp/cortiq-out
+cp /tmp/cortiq-out/bin/cortiq /path/to/cortiq-cpu
+```
+
+`--no-default-features` drops the GPU backends (`gpu`, `cuda`), which is what
+makes the binary portable: it runs on any card-less host, and the shipped file
+is statically linked. A CUDA build is worth it only when the target host has the
+NVIDIA libraries — that is a different bundle, not this one.
+
+Models: any `.cmf` file works. For LFM3-1.7B the smallest usable one is
+`lfm3-1.7b-q4tp.cmf` (0.86 GB, `infosave/LFM3-1.7B-cmf`).
 
 ## Install a bundle (offline)
 
@@ -74,9 +108,10 @@ What install does, in order:
 
 1. verifies `SHA256SUMS` (aborts on any mismatch);
 2. copies `rpi` to `$PREFIX/$NAME` (`~/.local/bin/rpi` by default);
-3. registers the extension: `$NAME install ./pi-embedded-ai/` (local path, no network);
-4. copies `models/*.llamafile` to `~/.pi/agent/models/` (skipped with `--skip-models`);
-5. with `--check`: starts the stack once and prints `--list-models` (proves the
+3. copies `cortiq-cpu` to `$PREFIX/cortiq-cpu` when the bundle carries it;
+4. registers the extension: `$NAME install ./pi-embedded-ai/` (local path, no network);
+5. copies `models/*.llamafile` and `models/*.cmf` to `~/.pi/agent/models/` (skipped with `--skip-models`);
+6. with `--check`: starts the stack once and prints `--list-models` (proves the
    model serves before you need it).
 
 Re-running `install.sh` is the upgrade path: it replaces the binary,
