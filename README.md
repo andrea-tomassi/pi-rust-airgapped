@@ -5,7 +5,7 @@ binaries, no models, no code of the stack itself** — only the scripts that
 assemble and install a self-contained offline bundle:
 
 ```
-pi-rust-airgapped-llamafile-<date>.tar.gz        a llamafile distro
+pi-rust-airgapped-llamafile-lfm3-1.7b-x86_64-rpi0.12.13.tar.gz  a llamafile distro
 ├── rpi                      # static musl binary (plain upstream pi-rust, renamed file)
 ├── pi-embedded-ai/            # the extension package (TS + lifecycle, no weights)
 ├── models/                  # .llamafile weights (from awesome-llamafiles)
@@ -13,7 +13,7 @@ pi-rust-airgapped-llamafile-<date>.tar.gz        a llamafile distro
 ├── install.sh               # offline installer
 └── README.md                # this file (copy)
 
-pi-rust-airgapped-cortiq-<date>.tar.gz          an LFM/cortiq distro
+pi-rust-airgapped-cortiq-lfm3-1.7b-x86_64-rpi0.12.13.tar.gz    an LFM/cortiq distro
 ├── rpi                      # same host binary
 ├── cortiq-cpu               # CPU-only cortiq engine (static)
 ├── pi-embedded-ai/            # same extension
@@ -22,6 +22,12 @@ pi-rust-airgapped-cortiq-<date>.tar.gz          an LFM/cortiq distro
 ├── install.sh
 └── README.md
 ```
+
+**Naming.** Tag: `bundle-v<rpi>-<rev>` — one release per bundle revision. Archive:
+`pi-rust-airgapped-<kind>-<model>-<arch>-rpi<rpi>.tar.gz`, one archive per model and
+technology; `<arch>` is `uname -m` verbatim because every binary inside is
+host-specific, and a bundled `ARCH` file makes `install.sh` refuse a cross-arch
+install.
 
 **One bundle, one technology.** A llamafile distro and a cortiq distro are separate
 artifacts: mixing `--models-dir` with `--cortiq-bin` is refused by the build, and
@@ -48,9 +54,9 @@ release asset on this repo. On the new host (one download, then offline):
 
 ```sh
 # repos are public: anonymous download works, `gh` optional
-gh release download bundle-v0.12.13-3 --repo andrea-tomassi/pi-rust-airgapped --pattern '*.tar.gz'
+gh release download bundle-v0.12.13-4 --repo andrea-tomassi/pi-rust-airgapped --pattern '*x86_64*.tar.gz'
 # or without gh:
-# curl -fsSL -o bundle.tar.gz https://github.com/andrea-tomassi/pi-rust-airgapped/releases/download/bundle-v0.12.13-3/pi-rust-airgapped-20261115.tar.gz
+# curl -fsSL -O https://github.com/andrea-tomassi/pi-rust-airgapped/releases/download/bundle-v0.12.13-4/pi-rust-airgapped-cortiq-lfm3-1.7b-x86_64-rpi0.12.13.tar.gz
 tar -xzf pi-rust-airgapped-*.tar.gz
 cd pi-rust-airgapped-*
 ./install.sh --name rpi --check   # checksum → binary → extension → models → live proof

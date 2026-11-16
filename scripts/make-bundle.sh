@@ -2,19 +2,23 @@
 # Assemble an airgapped bundle: rpi binary + pi-embedded-ai extension + models.
 # Usage: make-bundle.sh [--version vX.Y.Z | --rpi-bin PATH] [--extension-dir D]
 #                        [--models-dir D | --models-release TAG]
-#                        [--cortiq-bin PATH] [--cmf-dir D]
-#                        [--name rpi] [--out DIR]
+#                        [--cortiq-bin PATH] [--cmf-dir D | --cmf-release HF_REPO]
+#                        [--model-id ID] [--name rpi] [--out DIR]
+# The archive is arch-specific: pi-rust-airgapped-<kind>-<model>-<arch>-rpi<ver>.tar.gz
 # A --version build downloads the static musl binary from the fork's releases
 # (needs network at BUILD time). A --rpi-bin build is fully offline.
 # Models come from --models-dir (local checkout) or --models-release TAG
 # (downloaded from the awesome-llamafiles releases; needs `gh` auth).
 # --cortiq-bin adds the CPU-only cortiq engine (installed as `cortiq-cpu`) and
-# --cmf-dir its `.cmf` model files (an LFM distribution); both are optional, and
-# a bundle needs at least one model of either kind.
+# --cmf-dir / --cmf-release its `.cmf` model files (an LFM distribution);
+# --cmf-release downloads the models from a Hugging Face repo at build time and
+# verifies them against the repo's own `.sha256` sidecars. A bundle needs at
+# least one model of either kind.
 set -eu
 
 REPO_URL=https://github.com/yannelli/pi-rust
 TARGET=x86_64-unknown-linux-musl
+arch=$(uname -m)
 
 say() { printf '%s\n' "$*"; }
 die() {
@@ -28,6 +32,8 @@ extension_dir=
 models_dir=
 models_release=
 cortiq_bin=
+cmf_release=
+model_id=${model_id:-lfm3-1.7b}
 cmf_dir=
 name=rpi
 out=.
@@ -40,6 +46,8 @@ while [ $# -gt 0 ]; do
 	--models-dir) models_dir=${2:?--models-dir needs a value}; shift 2 ;;
 	--models-release) models_release=${2:?--models-release needs a value}; shift 2 ;;
 	--cortiq-bin) cortiq_bin=${2:?--cortiq-bin needs a value}; shift 2 ;;
+	--cmf-release) cmf_release=${2:?--cmf-release needs a value}; shift 2 ;;
+	--model-id) model_id=${2:?--model-id needs a value}; shift 2 ;;
 	--cmf-dir) cmf_dir=${2:?--cmf-dir needs a value}; shift 2 ;;
 	--name) name=${2:?--name needs a value}; shift 2 ;;
 	--out) out=${2:?--out needs a value}; shift 2 ;;
@@ -61,8 +69,8 @@ extension_dir=${extension_dir:-$root/../pi-embedded-ai}
 # so mixing the two inputs is refused instead of silently producing a hybrid.
 if [ -n "$cortiq_bin" ]; then
 	kind=cortiq
-	[ -z "${models_dir:-}" ] || die "--models-dir belongs to a llamafile bundle: a cortiq bundle takes --cmf-dir only"
-	[ -z "${models_release:-}" ] || die "--models-release belongs to a llamafile bundle: a cortiq bundle takes --cmf-dir only"
+	[ -z "${models_dir:-}" ] || die "--models-dir belongs to a llamafile bundle: a cortiq bundle takes --cmf-dir/--cmf-release"
+	[ -z "${models_release:-}" ] || die "--models-release belongs to a llamafile bundle: a cortiq bundle takes --cmf-dir/--cmf-release"
 else
 	kind=llamafile
 	[ -z "$cmf_dir" ] || die "--cmf-dir needs --cortiq-bin: a CMF model without its engine is not a bundle"
@@ -70,8 +78,8 @@ fi
 
 if [ "$kind" = cortiq ]; then
 	[ -x "$cortiq_bin" ] || die "not executable: $cortiq_bin"
-	[ -n "$cmf_dir" ] || die "a cortiq bundle needs --cmf-dir with at least one .cmf"
-	[ -d "$cmf_dir" ] || die "cmf dir not found: $cmf_dir"
+	[ -n "$cmf_dir" ] || [ -n "$cmf_release" ] || die "a cortiq bundle needs --cmf-dir or --cmf-release with at least one .cmf"
+	[ -z "$cmf_dir" ] || [ -d "$cmf_dir" ] || die "cmf dir not found: $cmf_dir"
 else
 	if [ -n "${models_release:-}" ]; then
 		[ -z "${models_dir:-}" ] || die "--models-dir and --models-release are mutually exclusive"
@@ -89,6 +97,10 @@ if [ -n "$rpi_bin" ]; then
 	[ -x "$rpi_bin" ] || die "not executable: $rpi_bin"
 	cp "$rpi_bin" "$work/rpi"
 else
+	case "$arch" in
+		x86_64) [ "$TARGET" = "x86_64-unknown-linux-musl" ] || die "no rpi release for $arch: pass --rpi-bin" ;;
+		*) die "no rpi release for $arch: pass --rpi-bin" ;;
+	esac
 	tag="v${version#v}"
 	url="$REPO_URL/releases/download/$tag/pi-$tag-$TARGET.tar.gz"
 	say "downloading $url"
@@ -142,6 +154,29 @@ if [ "$kind" = llamafile ]; then
 		[ -f "$models_dir/$doc" ] && cp "$models_dir/$doc" "$work/models/"
 	done
 else
+	if [ -n "$cmf_release" ]; then
+		[ -z "$cmf_dir" ] || die "--cmf-dir and --cmf-release are mutually exclusive"
+		cmf_dir="$work/cmf-dl"
+		mkdir -p "$cmf_dir"
+		say "downloading cmf models from huggingface.co/$cmf_release"
+		repo_files=$(curl -fsSL --retry 3 "https://huggingface.co/api/models/$cmf_release" \
+			| grep -o '"rfilename":"[^"]*"' | cut -d'"' -f4) || die "huggingface listing failed: $cmf_release"
+		for name in $repo_files; do
+			case "$name" in
+				*.cmf|*.cmf.sha256|README.md|LICENSE)
+					curl -fsSL --retry 3 -o "$cmf_dir/$name" \
+						"https://huggingface.co/$cmf_release/resolve/main/$name" \
+						|| die "download failed: $name"
+					;;
+			esac
+		done
+		for sum in "$cmf_dir"/*.cmf.sha256; do
+			[ -e "$sum" ] || continue
+			(cd "$cmf_dir" && sha256sum -c "$(basename "$sum")") >/dev/null \
+				|| die "sha256 mismatch: $sum"
+			say "verified: $(basename "$sum")"
+		done
+	fi
 	for model in "$cmf_dir"/*.cmf; do
 		[ -e "$model" ] || continue
 		cp "$model" "$work/models/"
@@ -154,15 +189,16 @@ else
 fi
 say "bundle: $kind ($found llamafile, $cmf cmf)"
 
-# 4. Installer + docs + checksums.
+# 4. Installer + docs + checksums. The ARCH marker lets install.sh refuse a
+# cross-arch install: binaries in here are not portable.
 cp "$root/scripts/install.sh" "$work/install.sh"
 cp "$root/README.md" "$work/README.md"
-payload="rpi pi-embedded-ai models install.sh README.md"
+printf '%s\n' "$arch" >"$work/ARCH"
+payload="rpi pi-embedded-ai models install.sh README.md ARCH"
 [ "$kind" = cortiq ] && payload="$payload cortiq-cpu"
 (cd "$work" && find $payload -type f -exec sha256sum {} + | sort -k2 >SHA256SUMS)
 
-stamp=$(date +%Y%m%d)
-bundle="pi-rust-airgapped-$kind-$stamp.tar.gz"
+bundle="pi-rust-airgapped-$kind-$model_id-$arch-rpi${version#v}.tar.gz"
 mkdir -p "$out"
 tar -czf "$out/$bundle" -C "$work" $payload SHA256SUMS
 say "bundle: $out/$bundle ($(du -h "$out/$bundle" | cut -f1))"

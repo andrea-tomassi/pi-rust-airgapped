@@ -38,6 +38,12 @@ esac
 [ -f ./rpi ] || die "run from the extracted bundle directory (./rpi missing)"
 [ -f ./SHA256SUMS ] || die "SHA256SUMS missing: refusing to install an unverified bundle"
 
+# The binaries are host-specific: refuse a cross-arch install before checksums
+# point the finger at files that are exactly what they were built as.
+if [ -f ./ARCH ] && [ "$(uname -m)" != "$(cat ./ARCH)" ]; then
+	die "bundle is for $(cat ./ARCH), this host is $(uname -m): pick the archive for your architecture"
+fi
+
 # 1. Verify integrity (offline: sha256sum of the bundle files).
 if command -v sha256sum >/dev/null 2>&1; then
 	sha256sum -c SHA256SUMS || die "checksum mismatch: bundle is corrupt or tampered with"
