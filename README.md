@@ -57,8 +57,7 @@ release asset on this repo. On the new host (one download, then offline):
 gh release download bundle-v0.12.13-4 --repo andrea-tomassi/pi-rust-airgapped --pattern '*x86_64*.tar.gz'
 # or without gh:
 # curl -fsSL -O https://github.com/andrea-tomassi/pi-rust-airgapped/releases/download/bundle-v0.12.13-4/pi-rust-airgapped-cortiq-lfm3-1.7b-x86_64-rpi0.12.13.tar.gz
-tar -xzf pi-rust-airgapped-*.tar.gz
-cd pi-rust-airgapped-*
+mkdir lfm && tar -xzf pi-rust-airgapped-*.tar.gz -C lfm && cd lfm
 ./install.sh --name rpi --check   # checksum → binary → extension → models → live proof
 ```
 
