@@ -5,15 +5,27 @@ binaries, no models, no code of the stack itself** — only the scripts that
 assemble and install a self-contained offline bundle:
 
 ```
-pi-rust-airgapped-<date>.tar.gz
+pi-rust-airgapped-llamafile-<date>.tar.gz        a llamafile distro
 ├── rpi                      # static musl binary (plain upstream pi-rust, renamed file)
-├── cortiq-cpu               # optional: CPU-only cortiq engine (an LFM/CMF distribution)
 ├── pi-embedded-ai/            # the extension package (TS + lifecycle, no weights)
-├── models/                  # .llamafile weights and/or .cmf models
+├── models/                  # .llamafile weights (from awesome-llamafiles)
 ├── SHA256SUMS               # integrity of everything above
 ├── install.sh               # offline installer
 └── README.md                # this file (copy)
+
+pi-rust-airgapped-cortiq-<date>.tar.gz          an LFM/cortiq distro
+├── rpi                      # same host binary
+├── cortiq-cpu               # CPU-only cortiq engine (static)
+├── pi-embedded-ai/            # same extension
+├── models/                  # .cmf models
+├── SHA256SUMS
+├── install.sh
+└── README.md
 ```
+
+**One bundle, one technology.** A llamafile distro and a cortiq distro are separate
+artifacts: mixing `--models-dir` with `--cortiq-bin` is refused by the build, and
+each installer only acts on what its bundle carries.
 
 Build time needs the inputs (network for a release download, or local paths
 for a fully offline build). **Install time is 100% offline** — and so is
@@ -25,12 +37,9 @@ everything after: the model runs locally, no API keys, no telemetry.
 |-------|----------------|---------------------------|
 | `rpi` binary | Upstream `yannelli/pi-rust` release (`--version`, vanilla binary renamed at bundle time) | `--rpi-bin /path/to/rpi` (local musl build) |
 | `pi-embedded-ai/` | `../pi-embedded-ai` checkout | `--extension-dir` |
-| `models/` | `../awesome-llamafiles` checkout, or `--models-release <tag>` (downloaded from the awesome-llamafiles releases) | `--models-dir` |
-| `cortiq-cpu` (optional) | — | `--cortiq-bin /path/to/cortiq` (CPU-only build, see below) |
-| `.cmf` models (optional) | — | `--cmf-dir /path/to/cmf-models` |
-
-A bundle needs at least one model of either kind, so a CMF-only LFM
-distribution needs no llamafile checkout at all.
+| llamafile distro: models | `../awesome-llamafiles` checkout, or `--models-release <tag>` | `--models-dir` |
+| cortiq distro: engine | — | `--cortiq-bin /path/to/cortiq` |
+| cortiq distro: models | — | `--cmf-dir /path/to/cmf-models` |
 
 ## New host from zero (no local checkouts needed)
 
@@ -55,13 +64,13 @@ the machine that runs `make-bundle.sh`.
 
 ## Build a bundle
 
-```sh
+# llamafile distro
 ./scripts/make-bundle.sh --version v0.12.14
 # fully offline build:
 ./scripts/make-bundle.sh --rpi-bin /path/to/rpi --extension-dir ../pi-embedded-ai --models-dir ../awesome-llamafiles
 # models from the published distro (needs `gh` auth, no local checkout):
 ./scripts/make-bundle.sh --rpi-bin /path/to/rpi --models-release models-v1
-# LFM distribution: CMF models served by the bundled cortiq, no llamafile at all
+# cortiq (LFM) distro: CMF models served by the bundled engine, no llamafile at all
 ./scripts/make-bundle.sh --rpi-bin /path/to/rpi \
   --cortiq-bin /path/to/cortiq-cpu --cmf-dir /path/to/cmf-models
 ```
@@ -109,7 +118,9 @@ What install does, in order:
 1. verifies `SHA256SUMS` (aborts on any mismatch);
 2. copies `rpi` to `$PREFIX/$NAME` (`~/.local/bin/rpi` by default);
 3. copies `cortiq-cpu` to `$PREFIX/cortiq-cpu` when the bundle carries it;
-4. registers the extension: `$NAME install ./pi-embedded-ai/` (local path, no network);
+4. registers the extension: copies `pi-embedded-ai/` to
+   `~/.pi/agent/extensions/pi-embedded-ai` and registers that absolute path
+   (a path into the extracted tarball would break once it is removed);
 5. copies `models/*.llamafile` and `models/*.cmf` to `~/.pi/agent/models/` (skipped with `--skip-models`);
 6. with `--check`: starts the stack once and prints `--list-models` (proves the
    model serves before you need it).

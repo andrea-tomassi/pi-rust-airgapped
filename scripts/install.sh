@@ -66,10 +66,16 @@ if [ -f ./cortiq-cpu ]; then
 	say "installed $prefix/cortiq-cpu ($("$prefix/cortiq-cpu" --version 2>/dev/null | head -1))"
 fi
 
-# 3. Register the extension from the local bundle path (no network).
+# 3. Register the extension from a stable copy inside $HOME, not from the extracted bundle:
+# a relative path here would point into the tarball directory and break as soon as it is removed.
 [ -d ./pi-embedded-ai ] || die "./pi-embedded-ai missing"
-"$prefix/$name" install ./pi-embedded-ai/ || die "extension install failed"
-say "extension pi-embedded-ai registered"
+[ -n "${HOME:-}" ] || die "HOME is not set: the extension needs a stable install path"
+ext_dest="$HOME/.pi/agent/extensions/pi-embedded-ai"
+rm -rf "$ext_dest"
+mkdir -p "$ext_dest" || die "could not create $ext_dest"
+cp -a ./pi-embedded-ai/. "$ext_dest/" || die "could not copy the extension to $ext_dest"
+"$prefix/$name" install "$ext_dest" || die "extension install failed"
+say "extension pi-embedded-ai registered from $ext_dest"
 
 # 4. Place the weights where the extension discovers them.
 if [ "$models" -eq 1 ]; then

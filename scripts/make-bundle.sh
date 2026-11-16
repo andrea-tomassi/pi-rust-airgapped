@@ -54,23 +54,32 @@ done
 
 root=$(CDPATH='' cd -- "$(dirname "$0")/.." && pwd)
 extension_dir=${extension_dir:-$root/../pi-embedded-ai}
-if [ -n "${models_release:-}" ]; then
-	[ -z "${models_dir:-}" ] || die "--models-dir and --models-release are mutually exclusive"
-else
-	explicit_models_dir=${models_dir:+1}
-	models_dir=${models_dir:-$root/../awesome-llamafiles}
-	# A CMF-only LFM distribution ships no llamafile: only an explicit but missing
-	# --models-dir is an error, the default directory simply means "no llamafiles".
-	if [ ! -d "$models_dir" ]; then
-		[ -z "$explicit_models_dir" ] || die "models dir not found: $models_dir"
-		[ -n "$cmf_dir" ] || die "models dir not found: $models_dir (and no --cmf-dir given)"
-	fi
-fi
 [ -d "$extension_dir" ] || die "extension dir not found: $extension_dir"
 [ -f "$extension_dir/package.json" ] || die "not an extension package: $extension_dir (no package.json)"
-[ -z "$cortiq_bin" ] || [ -x "$cortiq_bin" ] || die "not executable: $cortiq_bin"
-[ -z "$cmf_dir" ] || [ -d "$cmf_dir" ] || die "cmf dir not found: $cmf_dir"
-[ -z "$cmf_dir" ] || [ -n "$cortiq_bin" ] || die "--cmf-dir needs --cortiq-bin (a .cmf is useless without its engine)"
+
+# One bundle, one technology: a llamafile distro and a cortiq distro are separate artifacts,
+# so mixing the two inputs is refused instead of silently producing a hybrid.
+if [ -n "$cortiq_bin" ]; then
+	kind=cortiq
+	[ -z "${models_dir:-}" ] || die "--models-dir belongs to a llamafile bundle: a cortiq bundle takes --cmf-dir only"
+	[ -z "${models_release:-}" ] || die "--models-release belongs to a llamafile bundle: a cortiq bundle takes --cmf-dir only"
+else
+	kind=llamafile
+	[ -z "$cmf_dir" ] || die "--cmf-dir needs --cortiq-bin: a CMF model without its engine is not a bundle"
+fi
+
+if [ "$kind" = cortiq ]; then
+	[ -x "$cortiq_bin" ] || die "not executable: $cortiq_bin"
+	[ -n "$cmf_dir" ] || die "a cortiq bundle needs --cmf-dir with at least one .cmf"
+	[ -d "$cmf_dir" ] || die "cmf dir not found: $cmf_dir"
+else
+	if [ -n "${models_release:-}" ]; then
+		[ -z "${models_dir:-}" ] || die "--models-dir and --models-release are mutually exclusive"
+	else
+		models_dir=${models_dir:-$root/../awesome-llamafiles}
+	fi
+	[ -n "${models_release:-}" ] || [ -d "$models_dir" ] || die "models dir not found: $models_dir"
+fi
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT INT TERM
@@ -93,8 +102,9 @@ else
 fi
 chmod 755 "$work/rpi"
 
-# 1b. The CPU-only cortiq engine, installed as `cortiq-cpu` (the extension looks for that name).
-if [ -n "$cortiq_bin" ]; then
+# 1b. The cortiq engine of a cortiq bundle, installed as `cortiq-cpu` (the extension looks
+# for that name). A llamafile bundle carries no engine of its own.
+if [ "$kind" = cortiq ]; then
 	cp "$cortiq_bin" "$work/cortiq-cpu"
 	chmod 755 "$work/cortiq-cpu"
 	say "cortiq engine: $cortiq_bin -> cortiq-cpu ($(wc -c <"$work/cortiq-cpu" | tr -d ' ') bytes)"
@@ -111,28 +121,27 @@ mkdir -p "$work/pi-embedded-ai"
 
 # 3. The models (weights travel as files, never in git of the extension).
 mkdir -p "$work/models"
-if [ -n "${models_release:-}" ]; then
-	command -v gh >/dev/null 2>&1 || die "--models-release needs 'gh' (authenticated: gh auth login)"
-	models_dir="$work/models-dl"
-	mkdir -p "$models_dir"
-	say "downloading models $models_release from andrea-tomassi/awesome-llamafiles"
-	gh release download "$models_release" --repo andrea-tomassi/awesome-llamafiles \
-		--pattern '*.llamafile' --dir "$models_dir" || die "models download failed"
-fi
 found=0
-if [ -d "$models_dir" ]; then
+cmf=0
+if [ "$kind" = llamafile ]; then
+	if [ -n "${models_release:-}" ]; then
+		command -v gh >/dev/null 2>&1 || die "--models-release needs 'gh' (authenticated: gh auth login)"
+		models_dir="$work/models-dl"
+		mkdir -p "$models_dir"
+		say "downloading models $models_release from andrea-tomassi/awesome-llamafiles"
+		gh release download "$models_release" --repo andrea-tomassi/awesome-llamafiles \
+			--pattern '*.llamafile' --dir "$models_dir" || die "models download failed"
+	fi
 	for model in "$models_dir"/*.llamafile; do
 		[ -e "$model" ] || continue
 		cp "$model" "$work/models/"
 		found=$((found + 1))
 	done
+	[ "$found" -gt 0 ] || die "no .llamafile in $models_dir"
 	for doc in MODELS.md README.md LICENSE LICENSE.LFM3; do
 		[ -f "$models_dir/$doc" ] && cp "$models_dir/$doc" "$work/models/"
 	done
-fi
-# 3b. CMF models (an LFM distribution): same directory, discovered by the same extension.
-cmf=0
-if [ -n "$cmf_dir" ]; then
+else
 	for model in "$cmf_dir"/*.cmf; do
 		[ -e "$model" ] || continue
 		cp "$model" "$work/models/"
@@ -140,21 +149,20 @@ if [ -n "$cmf_dir" ]; then
 	done
 	[ "$cmf" -gt 0 ] || die "no .cmf in $cmf_dir"
 	for doc in README.md LICENSE LICENSE.LFM3; do
-		[ -f "$cmf_dir/$doc" ] && cp "$cmf_dir/$doc" "$work/models/$(basename "$cmf_dir")-$doc"
+		[ -f "$cmf_dir/$doc" ] && cp "$cmf_dir/$doc" "$work/models/"
 	done
 fi
-[ "$((found + cmf))" -gt 0 ] || die "no model in the bundle: give --models-dir (llamafiles) or --cmf-dir (.cmf)"
-say "models: $found llamafile(s), $cmf cmf"
+say "bundle: $kind ($found llamafile, $cmf cmf)"
 
 # 4. Installer + docs + checksums.
 cp "$root/scripts/install.sh" "$work/install.sh"
 cp "$root/README.md" "$work/README.md"
 payload="rpi pi-embedded-ai models install.sh README.md"
-[ -z "$cortiq_bin" ] || payload="$payload cortiq-cpu"
+[ "$kind" = cortiq ] && payload="$payload cortiq-cpu"
 (cd "$work" && find $payload -type f -exec sha256sum {} + | sort -k2 >SHA256SUMS)
 
 stamp=$(date +%Y%m%d)
-bundle="pi-rust-airgapped-$stamp.tar.gz"
+bundle="pi-rust-airgapped-$kind-$stamp.tar.gz"
 mkdir -p "$out"
 tar -czf "$out/$bundle" -C "$work" $payload SHA256SUMS
 say "bundle: $out/$bundle ($(du -h "$out/$bundle" | cut -f1))"
