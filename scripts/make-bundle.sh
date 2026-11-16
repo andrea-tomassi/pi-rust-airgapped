@@ -2,7 +2,7 @@
 # Assemble an airgapped bundle: rpi binary + pi-embedded-ai extension + models.
 # Usage: make-bundle.sh [--version vX.Y.Z | --rpi-bin PATH] [--extension-dir D]
 #                        [--models-dir D | --models-release TAG]
-#                        [--cortiq-bin PATH] [--cmf-dir D | --cmf-release HF_REPO]
+#                        [--cortiq-bin PATH] [--cmf-dir D | --cmf-release HF_REPO [--cmf-pattern PAT]]
 #                        [--model-id ID] [--name rpi] [--out DIR]
 # The archive is arch-specific: pi-rust-airgapped-<kind>-<model>-<arch>-rpi<ver>.tar.gz
 # A --version build downloads the static musl binary from the fork's releases
@@ -33,6 +33,7 @@ models_dir=
 models_release=
 cortiq_bin=
 cmf_release=
+cmf_pattern=
 model_id=${model_id:-lfm3-1.7b}
 cmf_dir=
 name=rpi
@@ -47,6 +48,7 @@ while [ $# -gt 0 ]; do
 	--models-release) models_release=${2:?--models-release needs a value}; shift 2 ;;
 	--cortiq-bin) cortiq_bin=${2:?--cortiq-bin needs a value}; shift 2 ;;
 	--cmf-release) cmf_release=${2:?--cmf-release needs a value}; shift 2 ;;
+	--cmf-pattern) cmf_pattern=${2:?--cmf-pattern needs a value}; shift 2 ;;
 	--model-id) model_id=${2:?--model-id needs a value}; shift 2 ;;
 	--cmf-dir) cmf_dir=${2:?--cmf-dir needs a value}; shift 2 ;;
 	--name) name=${2:?--name needs a value}; shift 2 ;;
@@ -162,6 +164,9 @@ else
 		repo_files=$(curl -fsSL --retry 3 "https://huggingface.co/api/models/$cmf_release" \
 			| grep -o '"rfilename":"[^"]*"' | cut -d'"' -f4) || die "huggingface listing failed: $cmf_release"
 		for name in $repo_files; do
+			if [ -n "$cmf_pattern" ] && ! printf '%s\n' "$name" | grep -q -- "$cmf_pattern"; then
+				continue
+			fi
 			case "$name" in
 				*.cmf|*.cmf.sha256|README.md|LICENSE)
 					curl -fsSL --retry 3 -o "$cmf_dir/$name" \
