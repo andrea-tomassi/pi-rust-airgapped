@@ -25,9 +25,10 @@ pi-rust-airgapped-cortiq-lfm3-1.7b-x86_64-rpi0.12.13.tar.gz    an LFM/cortiq dis
 
 **Naming.** Tag: `bundle-v<rpi>-<rev>` — one release per bundle revision. Archive:
 `pi-rust-airgapped-<kind>-<model>-<arch>-rpi<rpi>.tar.gz`, one archive per model and
-technology; `<arch>` is `uname -m` verbatim because every binary inside is
-host-specific, and a bundled `ARCH` file makes `install.sh` refuse a cross-arch
-install.
+technology; `<model>` is the model file stem from the source repo, quant included
+when the repo carries several (`lfm3-1.7b-q4tp`, `lfm3-1.7b-q8_2f`); `<arch>` is
+`uname -m` verbatim because every binary inside is host-specific, and a bundled
+`ARCH` file makes `install.sh` refuse a cross-arch install.
 
 **One bundle, one technology.** A llamafile distro and a cortiq distro are separate
 artifacts: mixing `--models-dir` with `--cortiq-bin` is refused by the build, and
